@@ -1,15 +1,17 @@
+import streamlit as st
 import requests
 import pandas as pd
 from bs4 import BeautifulSoup
 from itertools import cycle
-from datetime import date 
+from datetime import date
 import numpy as np
-from tqdm import tqdm   
 import random
 import time
 import collections
 import warnings
 
+from tqdm import tqdm
+import collections
 warnings.filterwarnings('ignore')
 
 today_date = date.today().strftime("%m/%d/%y").replace('/', '.')
@@ -17,19 +19,17 @@ today_date = date.today().strftime("%m/%d/%y").replace('/', '.')
 allStockData = {}
 tickers = []
 dataframes = []
-sector_data = collections.defaultdict(lambda : collections.defaultdict(dict))
+sector_data = collections.defaultdict(lambda: collections.defaultdict(dict))
 data_to_add = collections.defaultdict(list)
 
-
-grading_metrics = {'Valuation' : ['Fwd P/E', 'PEG', 'P/S', 'P/B', 'P/FCF'],
-                  'Profitability' : ['Profit M', 'Oper M', 'Gross M', 'ROE', 'ROA'],
-                  'Growth' : ['EPS this Y', 'EPS next Y', 'EPS next 5Y', 'Sales Q/Q', 'EPS Q/Q'],
-                  'Performance' : ['Perf Month', 'Perf Quart', 'Perf Half', 'Perf Year', 'Perf YTD', 'Volatility M']}
-
+grading_metrics = {'Valuation': ['Fwd P/E', 'PEG', 'P/S', 'P/B', 'P/FCF'],
+                   'Profitability': ['Profit M', 'Oper M', 'Gross M', 'ROE', 'ROA'],
+                   'Growth': ['EPS this Y', 'EPS next Y', 'EPS next 5Y', 'Sales Q/Q', 'EPS Q/Q'],
+                   'Performance': ['Perf Month', 'Perf Quart', 'Perf Half', 'Perf Year', 'Perf YTD', 'Volatility M']}
 
 URL = 'https://finviz.com/screener.ashx?v=152&c=0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,17,18,19,20,21,22,23,26,27,28,29,31,32,33,34,35,36,37,38,39,40,41,43,44,45,46,47,51,52,53,54,57,58,59,65,68,69'
 
-
+# Function to get proxies
 def getProxies(inURL):
 
     page = requests.get(inURL)
@@ -57,19 +57,7 @@ def getProxies(inURL):
     return IPs 
 
 
-proxyURL = "https://www.us-proxy.org/"
-pxs = getProxies(proxyURL)
-proxyPool = cycle(pxs)
-
-userAgentList = []
-useragents = open("useragents.txt", "r")
-
-for line in useragents:
-    userAgentList.append(line.replace('\n', ''))
-    
-useragents.close()
-
-
+# Function to get number of stocks
 def getNumStocks(url):
 
     agent = random.choice(userAgentList)
@@ -86,6 +74,7 @@ def getNumStocks(url):
     return float(num_stocks)
 
 
+# Function to get company data
 def get_company_data(url, debug=False):
     
     global allStockData
@@ -134,14 +123,15 @@ def get_company_data(url, debug=False):
     allStockData = pd.concat(dataframes)
     allStockData.columns = list(allStockData.iloc[0])
     allStockData = allStockData[1:]
-    
 
-    
+
+# Function to remove outliers
 def remove_outliers(S, std):    
     s1 = S[~((S-S.mean()).abs() > std * S.std())]
     return s1[~((s1-s1.mean()).abs() > std * s1.std())]
 
 
+# Function to get sector data
 def get_sector_data():
     
     global sector_data
@@ -164,9 +154,9 @@ def get_sector_data():
             sector_data[sector][metric]['10Pct'] = data.quantile(0.1)
             sector_data[sector][metric]['90Pct'] = data.quantile(0.9)
             sector_data[sector][metric]['Std'] = np.std(data, axis=0) / 5    
-    
-    
 
+
+# Function to get metric value
 def get_metric_val(ticker, metric_name):
     try:
         return float(str(allStockData.loc[allStockData['Ticker'] == ticker][metric_name].values[0]).rstrip("%"))
@@ -174,6 +164,7 @@ def get_metric_val(ticker, metric_name):
         return 0
 
 
+# Function to convert to letter grade
 def convert_to_letter_grade(val):
 
     grade_scores = {'A+' : 4.3, 'A' : 4.0, 'A-' : 3.7, 'B+' : 3.3, 'B' : 3.0, 'B-' : 2.7, 
@@ -182,8 +173,9 @@ def convert_to_letter_grade(val):
     for grade in grade_scores:
         if val >= grade_scores[grade]:
             return grade
-    
 
+
+# Function to get metric grade
 def get_metric_grade(sector, metric_name, metric_val):
     
     global sector_data
@@ -211,6 +203,7 @@ def get_metric_grade(sector, metric_name, metric_val):
     return 'C'
 
 
+# Function to get category grades
 def get_category_grades(ticker, sector):
     
     global grading_metrics
@@ -242,6 +235,7 @@ def get_category_grades(ticker, sector):
     return category_grades
     
     
+# Function to get stock rating
 def get_stock_rating(category_grades):
     
     score = 0
@@ -252,6 +246,7 @@ def get_stock_rating(category_grades):
     return round(score * 6.2, 2)   
     
     
+# Function to get stock rating data
 def get_stock_rating_data(debug=False):
     
     global data_to_add
@@ -287,6 +282,7 @@ def get_stock_rating_data(debug=False):
                 break
     
     
+# Function to export to CSV
 def export_to_csv(filename):
     
     global allStockData
@@ -305,13 +301,26 @@ def export_to_csv(filename):
     stock_csv_data.to_csv(filename, index=False)
     
     print('\nSaved as', f"StockRatings-{today_date}.csv")
-    
-      
-       
-get_company_data(URL, debug=False)
 
-get_sector_data()
 
-get_stock_rating_data()
+# Streamlit App
+def main():
+    st.title("Stock Ratings Dashboard")
+    st.sidebar.header("Input Tickers")
 
-export_to_csv(f"StockRatings-{today_date}.csv")
+    tickers_input = st.sidebar.text_input("Enter tickers (comma-separated)", "")
+    tickers = [ticker.strip() for ticker in tickers_input.split(",")]
+
+    if st.sidebar.button("Run Analysis"):
+        if not tickers:
+            st.warning("Please enter at least one ticker.")
+        else:
+            get_company_data(URL, debug=False)
+            get_sector_data()
+            get_stock_rating_data()
+            export_to_csv(f"StockRatings-{today_date}.csv")
+            st.success("Analysis completed and saved as StockRatings.csv")
+
+
+if __name__ == "__main__":
+    main()
